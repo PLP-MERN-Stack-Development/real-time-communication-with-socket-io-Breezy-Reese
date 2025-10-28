@@ -21,6 +21,8 @@ export const useSocket = () => {
   const [messages, setMessages] = useState([]);
   const [users, setUsers] = useState([]);
   const [typingUsers, setTypingUsers] = useState([]);
+ const [currentPage, setCurrentPage] = useState(1);
+ const [totalPages, setTotalPages] = useState(1);
 
   // Connect to socket server
   const connect = (username) => {
@@ -40,6 +42,10 @@ export const useSocket = () => {
     socket.emit('send_message', { message });
   };
 
+ const sendFile = (file) => {
+   socket.emit('send_file', file);
+ };
+
   // Send a private message
   const sendPrivateMessage = (to, message) => {
     socket.emit('private_message', { to, message });
@@ -50,7 +56,33 @@ export const useSocket = () => {
     socket.emit('typing', isTyping);
   };
 
+ const markAsRead = (messageId) => {
+   socket.emit('message_read', messageId);
+ };
+
+const fetchMessages = async (page = 1) => {
+  try {
+    const response = await fetch(`${SOCKET_URL}/api/messages?page=${page}&limit=20`);
+    const data = await response.json();
+    setMessages((prev) => [...data.messages, ...prev]);
+    setCurrentPage(data.currentPage);
+    setTotalPages(data.totalPages);
+  } catch (error) {
+    console.error('Failed to fetch messages:', error);
+  }
+};
+
+ const reactToMessage = (messageId, reaction) => {
+   socket.emit('react_to_message', { messageId, reaction });
+ };
+
   // Socket event listeners
+  useEffect(() => {
+   if (isConnected) {
+     fetchMessages();
+   }
+  }, [isConnected]);
+
   useEffect(() => {
     // Connection events
     const onConnect = () => {
@@ -118,8 +150,26 @@ export const useSocket = () => {
     socket.on('user_left', onUserLeft);
     socket.on('typing_users', onTypingUsers);
 
-    // Clean up event listeners
-    return () => {
+   const onMessageRead = (messageId) => {
+     setMessages((prev) =>
+       prev.map((m) => (m.id === messageId ? { ...m, read: true } : m))
+     );
+   };
+
+  socket.on('message_read_receipt', onMessageRead);
+
+  const onMessageReacted = ({ messageId, reactions }) => {
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === messageId ? { ...m, reactions } : m
+      )
+    );
+  };
+
+  socket.on('message_reacted', onMessageReacted);
+
+   // Clean up event listeners
+   return () => {
       socket.off('connect', onConnect);
       socket.off('disconnect', onDisconnect);
       socket.off('receive_message', onReceiveMessage);
@@ -128,6 +178,8 @@ export const useSocket = () => {
       socket.off('user_joined', onUserJoined);
       socket.off('user_left', onUserLeft);
       socket.off('typing_users', onTypingUsers);
+     socket.off('message_read_receipt', onMessageRead);
+     socket.off('message_reacted', onMessageReacted);
     };
   }, []);
 
@@ -143,6 +195,12 @@ export const useSocket = () => {
     sendMessage,
     sendPrivateMessage,
     setTyping,
+   markAsRead,
+   reactToMessage,
+   sendFile,
+   fetchMessages,
+   currentPage,
+   totalPages,
   };
 };
 

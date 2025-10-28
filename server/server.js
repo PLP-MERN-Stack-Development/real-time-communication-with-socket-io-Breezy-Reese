@@ -63,6 +63,17 @@ io.on('connection', (socket) => {
     io.emit('receive_message', message);
   });
 
+ socket.on('send_file', (fileData) => {
+   const message = {
+     id: Date.now(),
+     sender: users[socket.id]?.username || 'Anonymous',
+     senderId: socket.id,
+     timestamp: new Date().toISOString(),
+     file: fileData,
+   };
+   io.emit('receive_message', message);
+ });
+
   // Handle typing indicator
   socket.on('typing', (isTyping) => {
     if (users[socket.id]) {
@@ -93,9 +104,34 @@ io.on('connection', (socket) => {
     socket.emit('private_message', messageData);
   });
 
-  // Handle disconnection
-  socket.on('disconnect', () => {
-    if (users[socket.id]) {
+  // Handle read receipts
+  socket.on('message_read', (messageId) => {
+    const message = messages.find((m) => m.id === messageId);
+    if (message) {
+      message.read = true;
+      io.to(message.senderId).emit('message_read_receipt', messageId);
+    }
+  });
+
+  // Handle message reactions
+  socket.on('react_to_message', ({ messageId, reaction }) => {
+    const message = messages.find((m) => m.id === messageId);
+    if (message) {
+      if (!message.reactions) {
+        message.reactions = {};
+      }
+      if (message.reactions[reaction]) {
+        message.reactions[reaction]++;
+      } else {
+        message.reactions[reaction] = 1;
+      }
+      io.emit('message_reacted', { messageId, reactions: message.reactions });
+    }
+  });
+ 
+   // Handle disconnection
+   socket.on('disconnect', () => {
+     if (users[socket.id]) {
       const { username } = users[socket.id];
       io.emit('user_left', { username, id: socket.id });
       console.log(`${username} left the chat`);
@@ -111,7 +147,18 @@ io.on('connection', (socket) => {
 
 // API routes
 app.get('/api/messages', (req, res) => {
-  res.json(messages);
+ const page = parseInt(req.query.page, 10) || 1;
+ const limit = parseInt(req.query.limit, 10) || 20;
+ const startIndex = (page - 1) * limit;
+ const endIndex = page * limit;
+
+ const paginatedMessages = messages.slice(Math.max(0, messages.length - endIndex), Math.max(0, messages.length - startIndex));
+ 
+ res.json({
+   messages: paginatedMessages.reverse(),
+   totalPages: Math.ceil(messages.length / limit),
+   currentPage: page,
+ });
 });
 
 app.get('/api/users', (req, res) => {
