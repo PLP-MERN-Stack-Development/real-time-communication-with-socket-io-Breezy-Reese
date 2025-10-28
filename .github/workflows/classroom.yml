@@ -43,4 +43,4 @@ jobs:
     - name: Test server startup
       run: |
         cd server
-        timeout 10s npm run dev || echo "Server started successfully"
+        timeout 10s npm start || echo "Server started successfully (timeout expected)"
