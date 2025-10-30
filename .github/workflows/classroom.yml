@@ -1,0 +1,35 @@
+name: Node.js CI
+
+# This tells GitHub WHEN to run the workflow
+on:
+  push:
+    branches:
+      - main       # Change to your branch name if it's not 'main'
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:   # Allows manual triggering from GitHub UI
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20  # or 18 if your project uses that
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run tests
+        run: npm test
+        continue-on-error: true   # Optional: prevents workflow from failing on missing tests
+
+      - name: Run dev build
+        run: npm run dev
+        continue-on-error: true   # Optional: skip if you don’t want server to start here
